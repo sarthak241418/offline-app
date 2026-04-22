@@ -9,10 +9,15 @@ import org.springframework.stereotype.Service;
 public class ProductService {
 
     @Autowired
-     public ProductRepository productRepository;
+    public ProductRepository productRepository;
 
     public Product getProductByTagId(String tagId) {
         return productRepository.findByTagId(tagId)
-                .orElseThrow(() -> new RuntimeException("Product not found"));
+                .orElseThrow(() -> new RuntimeException("Product not found for tag: " + tagId));
+    }
+
+    // FIX: Added saveProduct so OrderService can decrement stock
+    public Product saveProduct(Product product) {
+        return productRepository.save(product);
     }
 }

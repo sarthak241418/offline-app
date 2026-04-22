@@ -24,6 +24,10 @@ public class Order {
     private String status;
     private LocalDateTime createdAt;
 
+    // FIX: Added tagId to support duplicate order prevention in OrderService
+    @Column(name = "tag_id")
+    private String tagId;
+
     @OneToMany(mappedBy = "order", cascade = CascadeType.ALL)
     @JsonManagedReference
     private List<OrderItem> items;

@@ -7,6 +7,7 @@ import lombok.NoArgsConstructor;
 import com.fasterxml.jackson.annotation.JsonBackReference;
 
 @Entity
+@Table(name = "order_items") // FIX: Added explicit table name for consistency
 @Data
 @NoArgsConstructor
 @AllArgsConstructor

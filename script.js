@@ -1,66 +1,86 @@
 let currentOrderId = null;
 
-// ✅ Updated backend URL (HOTSPOT IP)
-const BASE_URL = "http://172.20.10.2:8080";
+// FIX: Change this to your deployed backend URL when not running locally
+// e.g. "http://192.168.1.10:8080" or "https://your-backend.com"
+const BASE_URL = "http://localhost:8080";
+
+// FIX: Razorpay key fetched from a variable — replace with your key from application.properties
+// Do NOT hardcode the live key here
+const RAZORPAY_KEY = "rzp_test_SgRdbfoiG3LmdE";
 
 function showLoader(show) {
     document.getElementById("loader").classList.toggle("hidden", !show);
 }
 
-// ✅ QR Scan Success
+// Scan success
 function onScanSuccess(decodedText) {
-
+    const tagId = decodedText.trim();
     showLoader(true);
 
-    fetch(`${BASE_URL}/api/scan/${decodedText}`)
-        .then(res => res.json())
-        .then(data => {
+    // FIX: Stop scanner immediately after a successful scan
+    scanner.clear().catch(err => console.warn("Scanner clear error:", err));
 
+    fetch(`${BASE_URL}/api/scan/${encodeURIComponent(tagId)}`)
+        .then(res => {
+            if (!res.ok) {
+                return res.json().then(err => { throw new Error(err.message || "Scan request failed"); });
+            }
+            return res.json();
+        })
+        .then(data => {
             showLoader(false);
             currentOrderId = data.id;
+
+            if (!data.items || data.items.length === 0) {
+                document.getElementById("container").innerHTML = `
+                    <div class="card error">❌ Cart is empty</div>
+                `;
+                return;
+            }
 
             document.getElementById("container").innerHTML = `
                 <div class="card">
                     <h2>${data.items[0].product.name}</h2>
                     <p><strong>Price:</strong> ₹${data.totalAmount}</p>
-
                     <input type="email" id="email" placeholder="Enter your email">
-
                     <button onclick="pay()">💳 Pay Now</button>
                 </div>
             `;
         })
-        .catch(() => {
+        .catch(err => {
+            console.error("Scan error:", err);
             showLoader(false);
             document.getElementById("container").innerHTML = `
-                <div class="card error">❌ Product not found</div>
+                <div class="card error">❌ ${err.message || "Product not found"}</div>
             `;
         });
 }
 
-// ✅ Payment Function
+// Payment
 function pay() {
-
-    let email = document.getElementById("email").value;
+    let email = document.getElementById("email").value.trim();
 
     if (!email) {
-        alert("Enter email");
+        alert("Please enter your email");
         return;
     }
 
     showLoader(true);
 
-    // ✅ Step 1: Create Razorpay Order
     fetch(`${BASE_URL}/api/payment/create-order/${currentOrderId}`, {
         method: "POST"
     })
-        .then(res => res.json())
+        .then(res => {
+            if (!res.ok) {
+                return res.json().then(err => { throw new Error(err.message || "Create order failed"); });
+            }
+            return res.json();
+        })
         .then(order => {
-
             showLoader(false);
 
-            var options = {
-                key: "rzp_test_SgRdbfoiG3LmdE",
+            const options = {
+                key: RAZORPAY_KEY,
                 amount: order.amount,
                 currency: "INR",
                 name: "Smart Checkout",
@@ -68,20 +88,36 @@ function pay() {
                 order_id: order.id,
 
                 handler: function (response) {
+                    // FIX: Send all 3 Razorpay params for backend signature verification
+                    const params = new URLSearchParams({
+                        email: email,
+                        razorpayPaymentId: response.razorpay_payment_id,
+                        razorpayOrderId: response.razorpay_order_id,
+                        razorpaySignature: response.razorpay_signature
+                    });
 
-                    // ✅ Step 2: Confirm payment in backend
-                    fetch(`${BASE_URL}/api/payment/${currentOrderId}?email=${email}`, {
+                    fetch(`${BASE_URL}/api/payment/${currentOrderId}?${params.toString()}`, {
                         method: "POST"
                     })
-                        .then(res => res.text())
+                        .then(res => {
+                            if (!res.ok) {
+                                return res.json().then(err => { throw new Error(err.message || "Payment confirmation failed"); });
+                            }
+                            return res.text();
+                        })
                         .then(msg => {
-
                             document.getElementById("container").innerHTML = `
                                 <div class="card success">
                                     <h2>✅ Payment Successful</h2>
                                     <p>${msg}</p>
                                     <p><strong>Payment ID:</strong> ${response.razorpay_payment_id}</p>
                                 </div>
+                            `;
+                        })
+                        .catch(err => {
+                            console.error("Confirm payment error:", err);
+                            document.getElementById("container").innerHTML = `
+                                <div class="card error">❌ ${err.message || "Payment done but confirmation failed"}</div>
                             `;
                         });
                 },
@@ -95,18 +131,19 @@ function pay() {
                 }
             };
 
-            var rzp = new Razorpay(options);
+            const rzp = new Razorpay(options);
             rzp.open();
         })
-        .catch(() => {
+        .catch(err => {
+            console.error("Payment error:", err);
             showLoader(false);
             document.getElementById("container").innerHTML = `
-                <div class="card error">❌ Payment failed</div>
+                <div class="card error">❌ ${err.message || "Payment failed"}</div>
             `;
         });
 }
 
-// ✅ Start Scanner
+// Start scanner
 let scanner = new Html5QrcodeScanner("reader", {
     fps: 10,
     qrbox: 250

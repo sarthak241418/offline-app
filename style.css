@@ -42,6 +42,10 @@ input {
     padding: 10px;
     width: 90%;
     margin: 10px 0;
+    /* FIX: Prevents input from overflowing the card */
+    box-sizing: border-box;
+    border: 1px solid #ccc;
+    border-radius: 6px;
 }
 
 #loader {
